@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, NativeModules } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useWallet } from '../context/WalletContext';
 import { useTheme } from '../context/ThemeContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -27,10 +28,10 @@ const HomeScreen = () => {
             justifyContent: 'space-between',
             alignItems: 'center',
             marginBottom: 30,
-            marginTop: 10,
+            marginTop: 20,
         },
         title: {
-            fontSize: 28,
+            fontSize: 32,
             fontWeight: 'bold',
             color: colors.text,
         },
@@ -85,7 +86,7 @@ const HomeScreen = () => {
     });
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <Text style={styles.title}>{strings.title}</Text>
             </View>
@@ -110,7 +111,7 @@ const HomeScreen = () => {
                 <Text style={styles.footerText}>Desarrollador: Gio Digital MX</Text>
                 <Text style={styles.footerText}>www.giodigitalmx.com</Text>
             </View>
-        </View>
+        </SafeAreaView>
     );
 };
 

@@ -41,10 +41,11 @@ const ConfigurationScreen = () => {
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: 20,
+            marginBottom: 30,
+            marginTop: 20,
         },
         title: {
-            fontSize: 24,
+            fontSize: 32,
             fontWeight: 'bold',
             color: colors.text,
         },

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme, themes, ThemeType } from '../context/ThemeContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
@@ -30,59 +31,64 @@ const ProfileScreen = () => {
     );
 
     return (
-        <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-            <View style={styles.header}>
-                <Text style={[styles.title, { color: colors.text }]}>Profile</Text>
-            </View>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+            <ScrollView style={styles.scrollView}>
+                <View style={styles.header}>
+                    <Text style={[styles.title, { color: colors.text }]}>Profile</Text>
+                </View>
 
-            <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.subText }]}>Settings</Text>
+                <View style={styles.section}>
+                    <Text style={[styles.sectionTitle, { color: colors.subText }]}>Settings</Text>
 
-                <TouchableOpacity
-                    style={[styles.button, { backgroundColor: colors.card }]}
-                    onPress={() => navigation.navigate('Permissions')}
-                >
-                    <View style={styles.buttonContent}>
-                        <Icon name="security" size={24} color={colors.primary} />
-                        <Text style={[styles.buttonText, { color: colors.text }]}>Check Permissions</Text>
+                    <TouchableOpacity
+                        style={[styles.button, { backgroundColor: colors.card }]}
+                        onPress={() => navigation.navigate('Permissions')}
+                    >
+                        <View style={styles.buttonContent}>
+                            <Icon name="security" size={24} color={colors.primary} />
+                            <Text style={[styles.buttonText, { color: colors.text }]}>Check Permissions</Text>
+                        </View>
+                        <Icon name="chevron-right" size={24} color={colors.subText} />
+                    </TouchableOpacity>
+                </View>
+
+                <View style={styles.section}>
+                    <Text style={[styles.sectionTitle, { color: colors.subText }]}>Appearance</Text>
+                    <View style={styles.themeContainer}>
+                        {renderThemeOption('pink', 'Pink', themes.pink.primary)}
+                        {renderThemeOption('blue', 'Modern Blue', themes.blue.primary)}
+                        {renderThemeOption('purple', 'Purple', themes.purple.primary)}
                     </View>
-                    <Icon name="chevron-right" size={24} color={colors.subText} />
-                </TouchableOpacity>
-            </View>
-
-            <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.subText }]}>Appearance</Text>
-                <View style={styles.themeContainer}>
-                    {renderThemeOption('pink', 'Pink', themes.pink.primary)}
-                    {renderThemeOption('blue', 'Modern Blue', themes.blue.primary)}
-                    {renderThemeOption('purple', 'Purple', themes.purple.primary)}
-                </View>
-            </View>
-
-            <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.subText }]}>About</Text>
-
-                <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.devText, { color: colors.text }]}>Developer Info</Text>
-                    <Text style={[styles.subDevText, { color: colors.subText }]}>
-                        Created with ❤️ by GioDigitalMX
-                    </Text>
                 </View>
 
-                <TouchableOpacity
-                    style={[styles.feedbackButton, { backgroundColor: colors.primary }]}
-                    onPress={handleSendFeedback}
-                >
-                    <Icon name="mail" size={20} color="#FFF" />
-                    <Text style={styles.feedbackText}>Send Feedback</Text>
-                </TouchableOpacity>
-            </View>
-        </ScrollView>
+                <View style={styles.section}>
+                    <Text style={[styles.sectionTitle, { color: colors.subText }]}>About</Text>
+
+                    <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
+                        <Text style={[styles.devText, { color: colors.text }]}>Developer Info</Text>
+                        <Text style={[styles.subDevText, { color: colors.subText }]}>
+                            Created with ❤️ by GioDigitalMX
+                        </Text>
+                    </View>
+
+                    <TouchableOpacity
+                        style={[styles.feedbackButton, { backgroundColor: colors.primary }]}
+                        onPress={handleSendFeedback}
+                    >
+                        <Icon name="mail" size={20} color="#FFF" />
+                        <Text style={styles.feedbackText}>Send Feedback</Text>
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
+        flex: 1,
+    },
+    scrollView: {
         flex: 1,
         padding: 20,
     },
