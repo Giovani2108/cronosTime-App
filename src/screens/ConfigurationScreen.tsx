@@ -3,9 +3,9 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, LayoutAnimation, Pl
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApps, AppItem } from '../context/AppContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import AppDetailsComponent from '../components/AppDetailsComponent';
 import { strings } from '../utils/i18n';
 import { useTheme } from '../context/ThemeContext';
+import { useNavigation } from '@react-navigation/native';
 
 
 const { SoundModule } = NativeModules;
@@ -18,8 +18,8 @@ if (Platform.OS === 'android') {
 
 const ConfigurationScreen = () => {
     const { apps, toggleRestriction, loadApps } = useApps();
-    const [selectedApp, setSelectedApp] = React.useState<AppItem | null>(null);
     const { colors } = useTheme();
+    const navigation = useNavigation<any>();
 
     useEffect(() => {
         loadApps();
@@ -29,6 +29,10 @@ const ConfigurationScreen = () => {
         SoundModule.playBubblePop();
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         toggleRestriction(packageName);
+    };
+
+    const handleAppPress = (item: AppItem) => {
+        navigation.navigate('AppConfig', { app: item });
     };
 
     const styles = StyleSheet.create({
@@ -158,7 +162,7 @@ const ConfigurationScreen = () => {
                 )}
                 <TouchableOpacity
                     style={styles.appItem}
-                    onPress={() => setSelectedApp(item)}
+                    onPress={() => handleAppPress(item)}
                     activeOpacity={0.7}
                 >
                     <View style={styles.appInfo}>
@@ -210,14 +214,6 @@ const ConfigurationScreen = () => {
                 keyExtractor={item => item.packageName}
                 contentContainerStyle={styles.list}
             />
-
-            {selectedApp && (
-                <AppDetailsComponent
-                    visible={!!selectedApp}
-                    app={selectedApp}
-                    onClose={() => setSelectedApp(null)}
-                />
-            )}
         </SafeAreaView>
     );
 };

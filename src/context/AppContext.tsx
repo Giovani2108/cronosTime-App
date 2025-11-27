@@ -12,12 +12,16 @@ export interface AppItem {
     unlockCost: number;
     unlockDuration: number;
     usageTime?: number;
+    avoidedLaunches: number;
+    motivationalMessage: string;
+    isMotivationEnabled: boolean;
 }
 
 interface AppContextType {
     apps: AppItem[];
     toggleRestriction: (packageName: string) => void;
-    updateAppConfig: (packageName: string, cost: number, duration: number) => void;
+    updateAppConfig: (packageName: string, config: Partial<AppItem>) => void;
+    incrementAvoidedLaunches: (packageName: string) => void;
     loadApps: () => Promise<void>;
 }
 
@@ -25,6 +29,7 @@ const AppContext = createContext<AppContextType>({
     apps: [],
     toggleRestriction: () => { },
     updateAppConfig: () => { },
+    incrementAvoidedLaunches: () => { },
     loadApps: async () => { },
 });
 
@@ -48,11 +53,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const syncWithNativeService = (appList: AppItem[]) => {
-        const restrictedAppsConfig: { [key: string]: { cost: number; duration: number } } = {};
+        const restrictedAppsConfig: { [key: string]: { cost: number; duration: number; message?: string; showMessage?: boolean } } = {};
         appList.filter(a => a.isRestricted).forEach(a => {
             restrictedAppsConfig[a.packageName] = {
                 cost: a.unlockCost,
-                duration: a.unlockDuration
+                duration: a.unlockDuration,
+                message: a.motivationalMessage,
+                showMessage: a.isMotivationEnabled
             };
         });
         OverlayModule.startMonitoring(JSON.stringify(restrictedAppsConfig));
@@ -78,7 +85,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                         ...app,
                         isRestricted: existing ? existing.isRestricted : false,
                         unlockCost: existing ? existing.unlockCost : 10,
-                        unlockDuration: existing ? existing.unlockDuration : 5 * 60 * 1000,
+                        unlockDuration: existing ? existing.unlockDuration : 10 * 60 * 1000, // Default 10 mins
+                        avoidedLaunches: existing ? existing.avoidedLaunches || 0 : 0,
+                        motivationalMessage: existing ? existing.motivationalMessage || "Between stimulus and response there is a sacred space. In that space is the power to choose." : "Between stimulus and response there is a sacred space. In that space is the power to choose.",
+                        isMotivationEnabled: existing ? existing.isMotivationEnabled !== false : true, // Default true
                     };
                 });
 
@@ -106,10 +116,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
     };
 
-    const updateAppConfig = async (packageName: string, cost: number, duration: number) => {
+    const updateAppConfig = async (packageName: string, config: Partial<AppItem>) => {
         setApps(prevApps => {
             const newApps = prevApps.map(app =>
-                app.packageName === packageName ? { ...app, unlockCost: cost, unlockDuration: duration } : app
+                app.packageName === packageName ? { ...app, ...config } : app
             );
             AsyncStorage.setItem('cached_apps', JSON.stringify(newApps));
             syncWithNativeService(newApps);
@@ -117,8 +127,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
     };
 
+    const incrementAvoidedLaunches = async (packageName: string) => {
+        setApps(prevApps => {
+            const newApps = prevApps.map(app =>
+                app.packageName === packageName ? { ...app, avoidedLaunches: (app.avoidedLaunches || 0) + 1 } : app
+            );
+            AsyncStorage.setItem('cached_apps', JSON.stringify(newApps));
+            return newApps;
+        });
+    };
+
     return (
-        <AppContext.Provider value={{ apps, toggleRestriction, updateAppConfig, loadApps }}>
+        <AppContext.Provider value={{ apps, toggleRestriction, updateAppConfig, incrementAvoidedLaunches, loadApps }}>
             {children}
         </AppContext.Provider>
     );

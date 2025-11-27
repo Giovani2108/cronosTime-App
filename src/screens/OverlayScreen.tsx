@@ -1,93 +1,168 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, BackHandler, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, NativeModules, BackHandler } from 'react-native';
 import { useWallet } from '../context/WalletContext';
-import { useTimer } from '../context/TimerContext';
+import { useApps } from '../context/AppContext';
+import { useTheme } from '../context/ThemeContext';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
-// This screen is not navigated to by React Navigation usually.
-// It is intended to be shown when the Native Overlay is active, 
-// BUT since we can't easily render a full React Native screen inside the native overlay service 
-// without complex setup (Headless JS or multiple RN instances),
-// the Native Service currently shows a native Android view.
-//
-// However, if we wanted to handle the UI in RN, we would need to bring the app to foreground.
-//
-// For this MVP, the "Unlock" button in the Native Overlay Service should probably 
-// send an Intent to open the main app to a specific screen, OR we handle the logic natively.
-//
-// Given the complexity, let's assume the Native Overlay Service has a button "Open App to Unlock".
-// When clicked, it opens this screen.
+const { OverlayModule, SoundModule } = NativeModules;
 
-const OverlayScreen = () => {
-    const { spendCoins } = useWallet();
-    const { startTimer } = useTimer();
+const OverlayScreen = ({ route }: any) => {
+    const { packageName, cost, duration, message, showMessage } = route.params || {};
+    const { coins, spendCoins } = useWallet();
+    const { incrementAvoidedLaunches } = useApps();
+    const { colors } = useTheme();
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+            handleExit();
+            return true;
+        });
+        return () => backHandler.remove();
+    }, []);
 
     const handleUnlock = async () => {
-        const success = await spendCoins(10);
-        if (success) {
-            startTimer(10); // 10 minutes
-            // Close the app or minimize it to let user use the restricted app
-            BackHandler.exitApp();
+        if (coins >= cost) {
+            const success = await spendCoins(cost);
+            if (success) {
+                SoundModule.playPurchaseSuccess();
+                OverlayModule.unlockApp(packageName, duration);
+                // The native module will close the activity
+            } else {
+                setError("Transaction failed");
+            }
         } else {
-            Alert.alert("Error", "Not enough coins!");
+            SoundModule.playError();
+            setError("Not enough coins!");
         }
     };
 
+    const handleExit = () => {
+        incrementAvoidedLaunches(packageName);
+        OverlayModule.closeOverlay();
+    };
+
+    const styles = StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.9)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+        },
+        card: {
+            backgroundColor: colors.card,
+            padding: 30,
+            borderRadius: 20,
+            alignItems: 'center',
+            width: '90%',
+            elevation: 10,
+        },
+        icon: {
+            marginBottom: 20,
+        },
+        title: {
+            fontSize: 24,
+            fontWeight: 'bold',
+            color: colors.text,
+            marginBottom: 10,
+            textAlign: 'center',
+        },
+        message: {
+            fontSize: 16,
+            color: colors.text,
+            textAlign: 'center',
+            marginBottom: 20,
+            fontStyle: 'italic',
+            paddingHorizontal: 10,
+        },
+        costContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: 30,
+            backgroundColor: colors.background,
+            padding: 15,
+            borderRadius: 15,
+        },
+        costText: {
+            fontSize: 24,
+            fontWeight: 'bold',
+            color: colors.primary,
+            marginLeft: 10,
+        },
+        buttonContainer: {
+            width: '100%',
+            gap: 15,
+        },
+        unlockButton: {
+            backgroundColor: colors.primary,
+            padding: 15,
+            borderRadius: 12,
+            alignItems: 'center',
+            flexDirection: 'row',
+            justifyContent: 'center',
+        },
+        unlockText: {
+            color: '#fff',
+            fontSize: 18,
+            fontWeight: 'bold',
+            marginLeft: 10,
+        },
+        exitButton: {
+            backgroundColor: 'transparent',
+            padding: 15,
+            borderRadius: 12,
+            alignItems: 'center',
+            borderWidth: 2,
+            borderColor: colors.subText,
+        },
+        exitText: {
+            color: colors.subText,
+            fontSize: 16,
+            fontWeight: 'bold',
+        },
+        errorText: {
+            color: colors.error,
+            marginBottom: 15,
+            fontWeight: 'bold',
+        },
+    });
+
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>Restricted App Detected</Text>
-            <Text style={styles.message}>
-                You are trying to use a restricted app.
-                Would you like to buy 10 minutes for 10 coins?
-            </Text>
+            <View style={styles.card}>
+                <Icon name="lock" size={60} color={colors.primary} style={styles.icon} />
+                <Text style={styles.title}>App Locked</Text>
 
-            <TouchableOpacity style={styles.button} onPress={handleUnlock}>
-                <Text style={styles.buttonText}>Unlock (10 Coins)</Text>
-            </TouchableOpacity>
+                {showMessage && message ? (
+                    <Text style={styles.message}>"{message}"</Text>
+                ) : (
+                    <Text style={[styles.message, { fontStyle: 'normal' }]}>
+                        This app is restricted. Unlock it to continue.
+                    </Text>
+                )}
 
-            <TouchableOpacity style={[styles.button, styles.closeButton]} onPress={() => BackHandler.exitApp()}>
-                <Text style={styles.buttonText}>Close</Text>
-            </TouchableOpacity>
+                <View style={styles.costContainer}>
+                    <Icon name="monetization-on" size={30} color={colors.primary} />
+                    <Text style={styles.costText}>{cost} Coins / 10 min</Text>
+                </View>
+
+                {error && <Text style={styles.errorText}>{error}</Text>}
+
+                <View style={styles.buttonContainer}>
+                    <TouchableOpacity style={styles.unlockButton} onPress={handleUnlock}>
+                        <Icon name="lock-open" size={24} color="#fff" />
+                        <Text style={styles.unlockText}>Unlock</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.exitButton} onPress={handleExit}>
+                        <Text style={styles.exitText}>I'll do something else</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
         </View>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.9)',
-        padding: 20,
-    },
-    title: {
-        fontSize: 28,
-        color: '#fff',
-        fontWeight: 'bold',
-        marginBottom: 20,
-    },
-    message: {
-        fontSize: 18,
-        color: '#ccc',
-        textAlign: 'center',
-        marginBottom: 40,
-    },
-    button: {
-        backgroundColor: '#03dac6',
-        paddingVertical: 15,
-        paddingHorizontal: 40,
-        borderRadius: 30,
-        marginBottom: 20,
-        width: '100%',
-        alignItems: 'center',
-    },
-    closeButton: {
-        backgroundColor: '#cf6679',
-    },
-    buttonText: {
-        color: '#000',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-});
 
 export default OverlayScreen;

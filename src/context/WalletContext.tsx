@@ -6,6 +6,7 @@ interface WalletContextType {
   coins: number;
   addCoins: (amount: number) => Promise<void>;
   deductCoins: (amount: number) => Promise<boolean>;
+  spendCoins: (amount: number) => Promise<boolean>;
   isLoading: boolean;
 }
 
@@ -61,8 +62,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  const spendCoins = deductCoins;
+
   return (
-    <WalletContext.Provider value={{ coins, addCoins, deductCoins, isLoading }}>
+    <WalletContext.Provider value={{ coins, addCoins, deductCoins, spendCoins, isLoading }}>
       {children}
     </WalletContext.Provider>
   );
