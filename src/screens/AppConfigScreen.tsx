@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, TextInput, Image, ScrollView, Dimensions, NativeModules, Animated, Easing, InteractionManager } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, TextInput, Image, ScrollView, Dimensions, NativeModules, Animated, Easing, InteractionManager, Keyboard, Platform, findNodeHandle, UIManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useApps, AppItem } from '../context/AppContext';
@@ -130,6 +130,56 @@ const AppConfigScreen = () => {
         ]
     };
 
+    // Keyboard handling
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const scrollViewRef = useRef<ScrollView>(null);
+    const inputRef = useRef<TextInput>(null);
+
+    const scrollToInput = () => {
+        if (inputRef.current && scrollViewRef.current) {
+            const inputHandle = findNodeHandle(inputRef.current);
+            const scrollHandle = findNodeHandle(scrollViewRef.current);
+
+            if (inputHandle && scrollHandle) {
+                // Use UIManager directly to avoid issues with ref methods
+                UIManager.measureLayout(
+                    inputHandle,
+                    scrollHandle,
+                    () => console.log("Measure layout failed"),
+                    (x, y, width, height) => {
+                        scrollViewRef.current?.scrollTo({ y: y - 100, animated: true });
+                    }
+                );
+            }
+        }
+    };
+
+    useEffect(() => {
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+        const showSubscription = Keyboard.addListener(showEvent, (e) => {
+            setKeyboardHeight(e.endCoordinates.height);
+            // Check if input is focused and scroll to it
+            if (inputRef.current?.isFocused()) {
+                setTimeout(scrollToInput, 100);
+            }
+        });
+        const hideSubscription = Keyboard.addListener(hideEvent, () => {
+            setKeyboardHeight(0);
+        });
+
+        return () => {
+            showSubscription.remove();
+            hideSubscription.remove();
+        };
+    }, []);
+
+    const handleInputFocus = () => {
+        // Also try to scroll on focus, in case keyboard is already open or animating
+        setTimeout(scrollToInput, 200);
+    };
+
     const styles = StyleSheet.create({
         container: {
             flex: 1,
@@ -153,6 +203,7 @@ const AppConfigScreen = () => {
         content: {
             padding: 20,
             paddingTop: 0,
+            paddingBottom: keyboardHeight + 20, // Add keyboard height to padding
         },
         heroSection: {
             alignItems: 'center',
@@ -279,7 +330,11 @@ const AppConfigScreen = () => {
                 <Text style={styles.headerTitle}>Configuration</Text>
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView
+                ref={scrollViewRef}
+                contentContainerStyle={styles.content}
+                keyboardShouldPersistTaps="handled"
+            >
                 <View style={styles.heroSection}>
                     {app.icon ? (
                         <Image
@@ -452,9 +507,11 @@ const AppConfigScreen = () => {
                             {isMotivationEnabled && (
                                 <View style={styles.inputContainer}>
                                     <TextInput
+                                        ref={inputRef}
                                         style={styles.textInput}
                                         value={message}
                                         onChangeText={setMessage}
+                                        onFocus={handleInputFocus}
                                         multiline
                                         placeholder="Enter a motivational message..."
                                         placeholderTextColor={colors.subText}
