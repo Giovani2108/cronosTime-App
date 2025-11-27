@@ -69,6 +69,11 @@ class UsageStatsModule(reactContext: ReactApplicationContext) : ReactContextBase
                 val usageTime = usageMap[appInfo.packageName] ?: 0L
                 appMap.putDouble("usageTime", usageTime.toDouble())
 
+                // Add avoided launches count
+                val prefs = reactApplicationContext.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+                val avoidedCount = prefs.getInt("avoided_count_${appInfo.packageName}", 0)
+                appMap.putInt("avoidedLaunches", avoidedCount)
+
                 try {
                     val icon = pm.getApplicationIcon(appInfo.packageName)
                     val iconBase64 = getBase64FromDrawable(icon)

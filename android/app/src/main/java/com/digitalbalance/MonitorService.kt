@@ -138,6 +138,8 @@ class MonitorService : Service() {
                 // Play success sound
                 soundPool?.play(purchaseSoundId, 1f, 1f, 1, 0, 1f)
 
+                wasUnlocked = true // Mark as unlocked so we don't count as avoided
+
                 temporarilyUnlockedApps.add(topPackage)
                 unlockEndTimes[topPackage] = System.currentTimeMillis() + duration
                 
@@ -317,92 +319,296 @@ class MonitorService : Service() {
         var appName = "App"
         val isSpanish = java.util.Locale.getDefault().language.startsWith("es")
         
+        val config = appConfigs[packageName]
+        val configAppName = config?.optString("appName", "")
+        
         try {
-            val appInfo = pm.getApplicationInfo(packageName, 0)
-            val icon = pm.getApplicationIcon(appInfo)
-            appName = pm.getApplicationLabel(appInfo).toString()
-            iconView?.setImageDrawable(icon)
+            if (configAppName != null && configAppName.isNotEmpty()) {
+                appName = configAppName
+            } else {
+                val appInfo = pm.getApplicationInfo(packageName, 0)
+                appName = pm.getApplicationLabel(appInfo).toString()
+            }
         } catch (e: Exception) {
-            iconView?.setImageResource(android.R.drawable.sym_def_app_icon)
+            // Ignore
         }
 
-        titleView?.text = if (isSpanish) "APP RESTRINGIDA" else "RESTRICTED APP"
+        // Calculate Stats
+        val usageHistory = config?.optJSONArray("usageHistory")
+        var weeklyTotal = 0
+        var todayUsage = 0
+        var maxUsage = 1
+        val days = arrayOf("Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Thu") 
         
-        val config = appConfigs[packageName]
+        val calendar = java.util.Calendar.getInstance()
+        val dayLabels = Array(7) { "" }
+        for (i in 6 downTo 0) {
+            val dayName = java.text.SimpleDateFormat("E", java.util.Locale.US).format(calendar.time)
+            dayLabels[i] = dayName
+            calendar.add(java.util.Calendar.DAY_OF_YEAR, -1)
+        }
+
+        if (usageHistory != null && usageHistory.length() > 0) {
+            for (i in 0 until usageHistory.length()) {
+                val usage = usageHistory.getInt(i)
+                weeklyTotal += usage
+                if (usage > maxUsage) maxUsage = usage
+                if (i == usageHistory.length() - 1) todayUsage = usage
+            }
+        }
+        val dailyAvg = if (usageHistory?.length() ?: 0 > 0) weeklyTotal / usageHistory!!.length() else 0
+
+        // Update UI Elements
+        
+        // 1. Header (Cronos Time) - Static, no update needed usually, but we can ensure it's set if we want dynamic
+        
+        // 2. Subheader
+        val subheaderText = if (isSpanish) 
+            "Has usado $appName por ${formatTime(todayUsage)} hoy" 
+            else "You used $appName for ${formatTime(todayUsage)} today"
+        subheaderView?.text = subheaderText
+
+        // 3. Motivational Message Box
+        val message = config?.optString("message", "")
+        val showMessage = config?.optBoolean("showMessage", true) ?: true
+        
+        if (showMessage && !message.isNullOrEmpty()) {
+            motivationView?.text = message
+            motivationView?.visibility = View.VISIBLE
+        } else {
+            motivationView?.visibility = View.GONE
+        }
+
+        // 4. Chart
+        chartBarsContainer?.removeAllViews()
+        chartLabelsContainer?.removeAllViews()
+        
+        if (usageHistory != null && usageHistory.length() > 0) {
+            for (i in 0 until usageHistory.length()) {
+                val usage = usageHistory.getInt(i)
+                
+                // Bar Container
+                val barContainer = android.widget.LinearLayout(this)
+                barContainer.orientation = android.widget.LinearLayout.VERTICAL
+                barContainer.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                val containerParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.MATCH_PARENT)
+                containerParams.weight = 1f
+                
+                // Time Label (Above Bar)
+                val timeLabel = TextView(this)
+                val h = usage / 60
+                val m = usage % 60
+                timeLabel.text = "%d:%02d".format(h, m)
+                timeLabel.textSize = 10f
+                timeLabel.setTextColor(0xFFE0E0E0.toInt())
+                timeLabel.gravity = Gravity.CENTER
+                timeLabel.setPadding(0, 0, 0, 4) // Little padding above bar
+                
+                // The actual bar
+                val barHeightPercent = (usage.toFloat() / maxUsage.toFloat()).coerceIn(0.1f, 1f)
+                val bar = View(this)
+                // Thicker bars: 100px (Doubled)
+                val barParams = android.widget.LinearLayout.LayoutParams(100, 0) 
+                barParams.weight = barHeightPercent
+                
+                val barBg = android.graphics.drawable.GradientDrawable()
+                barBg.cornerRadius = 12f 
+                if (i == usageHistory.length() - 1) {
+                    barBg.setColor(0xFFE0E0E0.toInt()) // Today: White/Grey
+                } else {
+                    barBg.setColor(0xFF424242.toInt()) // Others: Dark Grey
+                }
+                bar.background = barBg
+                
+                // Empty space above bar
+                val emptySpace = View(this)
+                val emptyParams = android.widget.LinearLayout.LayoutParams(100, 0)
+                emptyParams.weight = 1f - barHeightPercent
+                
+                barContainer.addView(emptySpace, emptyParams)
+                barContainer.addView(timeLabel) // Add label between empty space and bar
+                barContainer.addView(bar, barParams)
+                chartBarsContainer?.addView(barContainer, containerParams)
+                
+                // Label
+                val label = TextView(this)
+                label.text = dayLabels[i]
+                label.textSize = 11f
+                label.setTextColor(0xFFAAAAAA.toInt())
+                label.gravity = Gravity.CENTER
+                val labelParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+                labelParams.weight = 1f
+                chartLabelsContainer?.addView(label, labelParams)
+            }
+        }
+
+        // 5. Stats Row (Only Daily Avg)
+        statAvgValue?.text = "Daily Average: ${formatTime(dailyAvg)}"
+
+        // 6. Action Buttons
         val cost = config?.optInt("cost", 10) ?: 10
         val durationMs = config?.optLong("duration", 5 * 60 * 1000) ?: (5 * 60 * 1000)
         val durationMin = durationMs / 60000
-
-        messageView?.text = if (isSpanish) 
-            "¿Deseas pagar $cost monedas por $durationMin minutos de $appName?" 
-            else "Do you want to pay $cost coins for $durationMin minutes of $appName?"
-            
-        unlockButton?.text = if (isSpanish) "Desbloquear ($cost monedas)" else "Unlock ($cost coins)"
+        
+        unlockButton?.text = "Desbloquear por $durationMin minutos ($$cost)"
         notNowButton?.text = if (isSpanish) "Ahora no" else "Not now"
+    }
+
+    private fun formatTime(minutes: Int): String {
+        if (minutes < 60) return "${minutes}m"
+        val h = minutes / 60
+        val m = minutes % 60
+        return if (m > 0) "${h}h ${m}m" else "${h}h"
+    }
+
+    private var subheaderView: TextView? = null
+    private var motivationView: TextView? = null
+    private var chartBarsContainer: android.widget.LinearLayout? = null
+    private var chartLabelsContainer: android.widget.LinearLayout? = null
+    private var statAvgValue: TextView? = null
+
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
     }
 
     private fun createOverlayView() {
         val layout = FrameLayout(this)
-        layout.setBackgroundColor(0xDD000000.toInt())
+        layout.setBackgroundColor(0xFF000000.toInt()) // Pure black background
 
-        val linearLayout = android.widget.LinearLayout(this)
-        linearLayout.orientation = android.widget.LinearLayout.VERTICAL
-        linearLayout.gravity = Gravity.CENTER
-        linearLayout.setPadding(60, 60, 60, 60)
+        val mainContainer = android.widget.LinearLayout(this)
+        mainContainer.orientation = android.widget.LinearLayout.VERTICAL
+        mainContainer.gravity = Gravity.CENTER // Vertically centered
+        mainContainer.setPadding(40, 40, 40, 40)
         
-        val layoutParams = FrameLayout.LayoutParams(
+        val mainParams = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
+            FrameLayout.LayoutParams.MATCH_PARENT
         )
-        layoutParams.gravity = Gravity.CENTER
-        layoutParams.leftMargin = 50
-        layoutParams.rightMargin = 50
-
-        // Icon
-        iconView = ImageView(this)
-        val iconParams = android.widget.LinearLayout.LayoutParams(180, 180)
-        iconParams.bottomMargin = 40
-        linearLayout.addView(iconView, iconParams)
-
-        // Title
-        titleView = TextView(this)
-        titleView?.textSize = 24f
-        titleView?.typeface = android.graphics.Typeface.DEFAULT_BOLD
-        titleView?.setTextColor(0xFFFFFFFF.toInt())
-        titleView?.gravity = Gravity.CENTER
-        titleView?.setPadding(0, 0, 0, 30)
-        linearLayout.addView(titleView)
-
-        // Message
-        messageView = TextView(this)
-        messageView?.textSize = 18f
-        messageView?.setTextColor(0xFFEEEEEE.toInt())
-        messageView?.gravity = Gravity.CENTER
-        messageView?.setPadding(0, 0, 0, 80)
-        linearLayout.addView(messageView)
         
-        // Unlock Button
+        // 1. Header "Cronos Time" with Icon
+        val headerLayout = android.widget.LinearLayout(this)
+        headerLayout.orientation = android.widget.LinearLayout.HORIZONTAL
+        headerLayout.gravity = Gravity.CENTER
+        headerLayout.setPadding(0, 0, 0, 20)
+
+        // App Icon (Cronos Time)
+        val appIconView = ImageView(this)
+        try {
+            val myIcon = packageManager.getApplicationIcon(packageName)
+            appIconView.setImageDrawable(myIcon)
+        } catch (e: Exception) {
+            appIconView.setImageResource(android.R.drawable.sym_def_app_icon)
+        }
+        val iconParams = android.widget.LinearLayout.LayoutParams(60, 60)
+        iconParams.rightMargin = 20
+        headerLayout.addView(appIconView, iconParams)
+
+        // App Name
+        val appNameView = TextView(this)
+        appNameView.text = "Cronos Time"
+        appNameView.textSize = 20f
+        appNameView.setTextColor(0xFFE0E0E0.toInt())
+        appNameView.typeface = android.graphics.Typeface.DEFAULT_BOLD
+        headerLayout.addView(appNameView)
+
+        mainContainer.addView(headerLayout)
+
+        // Subheader "You opened..."
+        subheaderView = TextView(this)
+        subheaderView?.textSize = 14f
+        subheaderView?.setTextColor(0xFFAAAAAA.toInt()) // Grey
+        subheaderView?.gravity = Gravity.CENTER
+        subheaderView?.setPadding(0, 0, 0, 30)
+        mainContainer.addView(subheaderView)
+
+        // 2. Motivational Message Box
+        motivationView = TextView(this)
+        motivationView?.textSize = 16f
+        motivationView?.setTextColor(0xFFE0E0E0.toInt())
+        motivationView?.gravity = Gravity.CENTER
+        motivationView?.setPadding(40, 40, 40, 40)
+        
+        val msgBg = android.graphics.drawable.GradientDrawable()
+        msgBg.setColor(0xFF2C2C2C.toInt()) // Dark Grey Fill
+        msgBg.setStroke(2, 0xFFE91E63.toInt()) // Pink Border
+        msgBg.cornerRadius = 20f
+        motivationView?.background = msgBg
+        
+        val msgParams = android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        msgParams.setMargins(20, 0, 20, 40)
+        mainContainer.addView(motivationView, msgParams)
+
+        // 3. Chart Section Container
+        val chartCard = android.widget.LinearLayout(this)
+        chartCard.orientation = android.widget.LinearLayout.VERTICAL
+        val chartBg = android.graphics.drawable.GradientDrawable()
+        chartBg.setColor(0xFF1E1E1E.toInt()) // Slightly lighter black
+        chartBg.cornerRadius = 30f
+        chartCard.background = chartBg
+        chartCard.setPadding(40, 40, 40, 40)
+        
+        val chartCardParams = android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        chartCardParams.setMargins(20, 0, 20, 40)
+
+        // Chart Bars
+        chartBarsContainer = android.widget.LinearLayout(this)
+        chartBarsContainer?.orientation = android.widget.LinearLayout.HORIZONTAL
+        val barsParams = android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            dpToPx(120) // Height of bars
+        )
+        chartCard.addView(chartBarsContainer, barsParams)
+
+        // Chart Labels
+        chartLabelsContainer = android.widget.LinearLayout(this)
+        chartLabelsContainer?.orientation = android.widget.LinearLayout.HORIZONTAL
+        val labelsParams = android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        labelsParams.setMargins(0, 10, 0, 30)
+        chartCard.addView(chartLabelsContainer, labelsParams)
+
+        // Stats Row (Only Daily Avg)
+        statAvgValue = TextView(this)
+        statAvgValue?.textSize = 14f
+        statAvgValue?.setTextColor(0xFFFFFFFF.toInt())
+        statAvgValue?.gravity = Gravity.CENTER
+        statAvgValue?.typeface = android.graphics.Typeface.DEFAULT_BOLD
+        
+        chartCard.addView(statAvgValue)
+        mainContainer.addView(chartCard, chartCardParams)
+
+        // 4. Action Buttons (Below Chart)
         unlockButton = Button(this)
-        unlockButton?.background?.setColorFilter(0xFF6200EE.toInt(), android.graphics.PorterDuff.Mode.MULTIPLY)
-        unlockButton?.setTextColor(0xFFFFFFFF.toInt())
+        val btnBg = android.graphics.drawable.GradientDrawable()
+        btnBg.setColor(0xFFE0E0E0.toInt()) // White button
+        btnBg.cornerRadius = 25f
+        unlockButton?.background = btnBg
+        unlockButton?.setTextColor(0xFF000000.toInt()) // Black text
         unlockButton?.textSize = 16f
-        unlockButton?.setPadding(40, 20, 40, 20)
+        unlockButton?.isAllCaps = false
         unlockButton?.setOnClickListener {
             unlockApp()
         }
         val btnParams = android.widget.LinearLayout.LayoutParams(
             android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 
-            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            dpToPx(50)
         )
-        btnParams.bottomMargin = 40
-        linearLayout.addView(unlockButton, btnParams)
+        btnParams.setMargins(40, 0, 40, 20)
+        mainContainer.addView(unlockButton, btnParams)
 
-        // Not Now Button
         notNowButton = TextView(this)
         notNowButton?.textSize = 16f
         notNowButton?.setTextColor(0xFFAAAAAA.toInt())
         notNowButton?.gravity = Gravity.CENTER
-        notNowButton?.setPadding(30, 30, 30, 30)
+        notNowButton?.setPadding(30, 20, 30, 40)
         notNowButton?.setOnClickListener {
             val startMain = Intent(Intent.ACTION_MAIN)
             startMain.addCategory(Intent.CATEGORY_HOME)
@@ -410,17 +616,20 @@ class MonitorService : Service() {
             startActivity(startMain)
             hideOverlay()
         }
-        linearLayout.addView(notNowButton)
-        
-        layout.addView(linearLayout, layoutParams)
+        mainContainer.addView(notNowButton)
+
+        layout.addView(mainContainer, mainParams)
         overlayView = layout
     }
+
+    private var wasUnlocked = false
 
     private fun showOverlay() {
         if (overlayView == null) createOverlayView()
         
         if (!isOverlayShowing && overlayView != null) {
             try {
+                wasUnlocked = false // Reset unlock status when showing overlay
                 val params = WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
@@ -448,6 +657,11 @@ class MonitorService : Service() {
     private fun hideOverlay() {
         if (isOverlayShowing && overlayView != null) {
             try {
+                // Check if we should count this as an avoided launch
+                if (!wasUnlocked && currentBlockedPackage != null) {
+                    incrementAvoidedCount(currentBlockedPackage!!)
+                }
+
                 if (overlayView?.parent != null) {
                     windowManager.removeView(overlayView)
                 }
@@ -456,6 +670,12 @@ class MonitorService : Service() {
                 e.printStackTrace()
             }
         }
+    }
+
+    private fun incrementAvoidedCount(packageName: String) {
+        val prefs = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+        val currentCount = prefs.getInt("avoided_count_$packageName", 0)
+        prefs.edit().putInt("avoided_count_$packageName", currentCount + 1).apply()
     }
 
 

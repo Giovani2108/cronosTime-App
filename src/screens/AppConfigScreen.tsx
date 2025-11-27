@@ -17,13 +17,15 @@ type AppConfigRouteProp = RouteProp<RootStackParamList, 'AppConfig'>;
 
 const AppConfigScreen = () => {
     const { colors } = useTheme();
-    const { toggleRestriction, updateAppConfig, incrementAvoidedLaunches } = useApps();
+    const { apps, toggleRestriction, updateAppConfig, incrementAvoidedLaunches } = useApps();
     const navigation = useNavigation();
     const route = useRoute<AppConfigRouteProp>();
-    const { app } = route.params;
+    const { app: initialApp } = route.params;
+    const app = apps.find(a => a.packageName === initialApp.packageName) || initialApp;
 
     // Local state for form inputs
     const [cost, setCost] = useState(app.unlockCost);
+    const [duration, setDuration] = useState(Math.floor(app.unlockDuration / 60000)); // Convert ms to min
     const [message, setMessage] = useState(app.motivationalMessage);
     const [isMotivationEnabled, setIsMotivationEnabled] = useState(app.isMotivationEnabled);
 
@@ -33,6 +35,7 @@ const AppConfigScreen = () => {
         datasets: [{ data: [0, 0, 0, 0, 0, 0, 0] }]
     });
     const [maxUsage, setMaxUsage] = useState(0);
+    const [dailyAverage, setDailyAverage] = useState("0m");
     const [isChartReady, setIsChartReady] = useState(false);
 
     // Animation refs
@@ -47,6 +50,13 @@ const AppConfigScreen = () => {
         return () => task.cancel();
     }, []);
 
+    const formatTime = (minutes: number) => {
+        if (minutes < 60) return `${minutes}m`;
+        const hrs = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
+    };
+
     const fetchUsageHistory = async () => {
         try {
             const history = await UsageStatsModule.getWeeklyUsage(app.packageName);
@@ -54,6 +64,7 @@ const AppConfigScreen = () => {
             const labels: string[] = [];
             const data: number[] = [];
             let max = 0;
+            let totalMinutes = 0;
 
             history.forEach((day: any) => {
                 const dateObj = new Date(day.date);
@@ -62,8 +73,12 @@ const AppConfigScreen = () => {
 
                 const minutes = Math.round(day.usage / 1000 / 60);
                 data.push(minutes);
+                totalMinutes += minutes;
                 if (minutes > max) max = minutes;
             });
+
+            const avg = data.length > 0 ? Math.round(totalMinutes / data.length) : 0;
+            setDailyAverage(formatTime(avg));
 
             setMaxUsage(max);
             setChartData({
@@ -88,6 +103,7 @@ const AppConfigScreen = () => {
     const handleSave = () => {
         updateAppConfig(app.packageName, {
             unlockCost: cost,
+            unlockDuration: duration * 60000, // Convert min to ms
             motivationalMessage: message,
             isMotivationEnabled: isMotivationEnabled
         });
@@ -227,9 +243,9 @@ const AppConfigScreen = () => {
         },
         costButton: {
             backgroundColor: colors.primary,
-            width: 40,
-            height: 40,
-            borderRadius: 20,
+            width: 32,
+            height: 32,
+            borderRadius: 16,
             justifyContent: 'center',
             alignItems: 'center',
         },
@@ -237,7 +253,7 @@ const AppConfigScreen = () => {
             fontSize: 24,
             fontWeight: 'bold',
             color: colors.text,
-            marginHorizontal: 20,
+            marginHorizontal: 10,
         },
         saveButton: {
             backgroundColor: colors.primary,
@@ -295,7 +311,12 @@ const AppConfigScreen = () => {
                 {app.isRestricted && (
                     <>
                         <View style={styles.card}>
-                            <Text style={styles.chartTitle}>Usage History (Last 7 Days)</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                                <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text }}>Usage History</Text>
+                                <Text style={{ fontSize: 14, color: colors.primary, fontWeight: '600' }}>
+                                    Daily Avg: {dailyAverage}
+                                </Text>
+                            </View>
                             {isChartReady && (
                                 <Animated.View style={{
                                     transform: [
@@ -366,22 +387,52 @@ const AppConfigScreen = () => {
                         </View>
 
                         <View style={styles.card}>
-                            <Text style={styles.label}>Unlock Cost</Text>
-                            <Text style={styles.subLabel}>Coins required for 10 minutes</Text>
-                            <View style={styles.costControls}>
-                                <TouchableOpacity
-                                    style={styles.costButton}
-                                    onPress={() => setCost(Math.max(1, cost - 1))}
-                                >
-                                    <Icon name="remove" size={24} color="#fff" />
-                                </TouchableOpacity>
-                                <Text style={styles.costValue}>{cost}</Text>
-                                <TouchableOpacity
-                                    style={styles.costButton}
-                                    onPress={() => setCost(cost + 1)}
-                                >
-                                    <Icon name="add" size={24} color="#fff" />
-                                </TouchableOpacity>
+                            <Text style={styles.label}>Unlock Settings</Text>
+                            <Text style={styles.subLabel}>Configure time and cost to unlock</Text>
+
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
+                                {/* Time Column */}
+                                <View style={{ alignItems: 'center', flex: 1 }}>
+                                    <Text style={{ color: colors.subText, marginBottom: 10, fontSize: 16 }}>Time (min)</Text>
+                                    <View style={styles.costControls}>
+                                        <TouchableOpacity
+                                            style={styles.costButton}
+                                            onPress={() => setDuration(Math.max(1, duration - 1))}
+                                        >
+                                            <Icon name="remove" size={24} color="#fff" />
+                                        </TouchableOpacity>
+                                        <Text style={styles.costValue}>{duration}</Text>
+                                        <TouchableOpacity
+                                            style={styles.costButton}
+                                            onPress={() => setDuration(duration + 1)}
+                                        >
+                                            <Icon name="add" size={24} color="#fff" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                {/* Divider */}
+                                <View style={{ width: 1, backgroundColor: colors.border, height: '80%' }} />
+
+                                {/* Cost Column */}
+                                <View style={{ alignItems: 'center', flex: 1 }}>
+                                    <Text style={{ color: colors.subText, marginBottom: 10, fontSize: 16 }}>Cost (coins)</Text>
+                                    <View style={styles.costControls}>
+                                        <TouchableOpacity
+                                            style={styles.costButton}
+                                            onPress={() => setCost(Math.max(1, cost - 1))}
+                                        >
+                                            <Icon name="remove" size={24} color="#fff" />
+                                        </TouchableOpacity>
+                                        <Text style={styles.costValue}>{cost}</Text>
+                                        <TouchableOpacity
+                                            style={styles.costButton}
+                                            onPress={() => setCost(cost + 1)}
+                                        >
+                                            <Icon name="add" size={24} color="#fff" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
                             </View>
                         </View>
 
