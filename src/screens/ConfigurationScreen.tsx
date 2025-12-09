@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, LayoutAnimation, Platform, UIManager, Image, NativeModules } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, LayoutAnimation, Platform, UIManager, Image, NativeModules, Vibration } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApps, AppItem } from '../context/AppContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -27,6 +27,7 @@ const ConfigurationScreen = () => {
 
     const handleToggle = (packageName: string) => {
         SoundModule.playBubblePop();
+        Vibration.vibrate(50);
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         toggleRestriction(packageName);
     };

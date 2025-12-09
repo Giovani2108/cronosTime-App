@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme, themes, ThemeType } from '../context/ThemeContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
+import { strings } from '../utils/i18n';
 
 const ProfileScreen = () => {
     const { theme, setTheme, colors } = useTheme();
@@ -39,6 +40,17 @@ const ProfileScreen = () => {
 
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: colors.subText }]}>Settings</Text>
+
+                    <TouchableOpacity
+                        style={[styles.button, { backgroundColor: colors.card, marginBottom: 10 }]}
+                        onPress={() => navigation.navigate('Customization')}
+                    >
+                        <View style={styles.buttonContent}>
+                            <Icon name="tune" size={24} color={colors.primary} />
+                            <Text style={[styles.buttonText, { color: colors.text }]}>{strings.customize}</Text>
+                        </View>
+                        <Icon name="chevron-right" size={24} color={colors.subText} />
+                    </TouchableOpacity>
 
                     <TouchableOpacity
                         style={[styles.button, { backgroundColor: colors.card }]}

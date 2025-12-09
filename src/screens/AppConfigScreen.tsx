@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, TextInput, Image, ScrollView, Dimensions, NativeModules, Animated, Easing, InteractionManager, Keyboard, Platform, findNodeHandle, UIManager } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, TextInput, Image, ScrollView, Dimensions, NativeModules, Animated, Easing, InteractionManager, Keyboard, Platform, findNodeHandle, UIManager, Vibration } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useApps, AppItem } from '../context/AppContext';
@@ -111,6 +111,7 @@ const AppConfigScreen = () => {
     };
 
     const handleToggleRestriction = () => {
+        Vibration.vibrate(50);
         toggleRestriction(app.packageName);
     };
 

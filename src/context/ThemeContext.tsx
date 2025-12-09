@@ -13,7 +13,8 @@ export const themes = {
         border: '#FFC0CB',
         success: '#4caf50',
         error: '#f44336',
-        icon: '#FF1493'
+        icon: '#FF1493',
+        surface: '#FFFFFF'
     },
     blue: {
         background: '#E3F2FD', // Light Blue
@@ -24,7 +25,8 @@ export const themes = {
         border: '#BBDEFB',
         success: '#4caf50',
         error: '#f44336',
-        icon: '#1565C0'
+        icon: '#1565C0',
+        surface: '#FFFFFF'
     },
     purple: {
         background: '#F3E5F5', // Purple 50
@@ -35,7 +37,8 @@ export const themes = {
         border: '#E1BEE7',
         success: '#4caf50',
         error: '#f44336',
-        icon: '#7B1FA2'
+        icon: '#7B1FA2',
+        surface: '#FFFFFF'
     }
 };
 
